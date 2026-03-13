@@ -87,6 +87,7 @@ export default function TechnicianTaskDetail() {
     const canGoOnWay = (ticket.status === "ASSIGNED" || ticket.status === "OPEN") && !onWaySent;
     const canBlock = ticket.status === "IN_PROGRESS" || ticket.status === "ASSIGNED";
     const canComplete = ticket.status === "IN_PROGRESS";
+    const canUnblock = ticket.status === "BLOCKED";
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -99,7 +100,7 @@ export default function TechnicianTaskDetail() {
                 <StatusBadge status={ticket.status as any} />
             </header>
 
-            <div className="flex flex-col gap-4 p-4 pb-32">
+            <div className="flex flex-col gap-4 p-4 pb-72">
 
                 {/* Title and Category */}
                 <div>
@@ -218,7 +219,7 @@ export default function TechnicianTaskDetail() {
             </div>
 
             {/* Action Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 pb-safe flex flex-col gap-2">
+            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 flex flex-col gap-2 z-40">
                 {/* On My Way */}
                 {canGoOnWay && (
                     <motion.button
@@ -248,7 +249,7 @@ export default function TechnicianTaskDetail() {
                     </div>
                 )}
 
-                {/* Block and Complete */}
+                {/* Block, Unblock, and Complete */}
                 <div className="flex gap-2">
                     {canBlock && (
                         <Button
@@ -258,6 +259,16 @@ export default function TechnicianTaskDetail() {
                         >
                             <XCircle className="w-4 h-4 mr-1.5" />
                             Block
+                        </Button>
+                    )}
+                    {canUnblock && (
+                        <Button
+                            variant="outline"
+                            className="flex-1 h-12 border-pt-accent/40 text-pt-accent hover:bg-pt-accent/10 rounded-xl font-medium"
+                            onClick={() => router.push(`/technician/tasks/${id}/unblock`)}
+                        >
+                            <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                            Unblock
                         </Button>
                     )}
                     {canComplete && (

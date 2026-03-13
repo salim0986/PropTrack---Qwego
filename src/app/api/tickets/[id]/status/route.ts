@@ -9,7 +9,7 @@ import { sendNotification } from "@/lib/notify";
 import { z } from "zod";
 
 const statusUpdateSchema = z.discriminatedUnion("action", [
-    // Technician: on the way (idempotent — does NOT change status)
+    // Technician: on the way (idempotent)
     z.object({ action: z.literal("ON_THE_WAY") }),
 
     // Technician: start the job → IN_PROGRESS
@@ -33,6 +33,9 @@ const statusUpdateSchema = z.discriminatedUnion("action", [
         action: z.literal("REOPEN"),
         reason: z.string().min(10, "Please provide a detailed reason for reopening"),
     }),
+
+    // Manager: verify completed work (closes review loop while keeping DONE state)
+    z.object({ action: z.literal("VERIFY_DONE") }),
 
     // Technician: unblock (mandatory note - Rule 12)
     z.object({
@@ -72,6 +75,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 return NextResponse.json({ message: "Only the assigned technician can do this" }, { status: 403 });
             }
 
+            const shouldMoveToInProgress = ["ASSIGNED", "REOPENED"].includes(ticket.status);
+
             // Idempotency check: look for an existing ON_THE_WAY activity on this ticket
             const recentOnWay = await db.query.activityLogsTable.findFirst({
                 where: and(
@@ -82,15 +87,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
 
             if (recentOnWay) {
+                // Backfill status for tickets created before ON_THE_WAY started transitioning status.
+                if (shouldMoveToInProgress) {
+                    await db.update(ticketsTable)
+                        .set({ status: "IN_PROGRESS" })
+                        .where(eq(ticketsTable.id, id));
+                    return NextResponse.json({ success: true, alreadySent: true, statusUpdated: true });
+                }
+
                 return NextResponse.json({ success: true, alreadySent: true });
             }
 
-            // Log activity only — status stays ASSIGNED (tech hasn't started yet)
-            await db.insert(activityLogsTable).values({
-                ticketId: id,
-                actorId: userId,
-                action: "ON_THE_WAY",
-                message: "Technician is on the way to the unit",
+            await db.transaction(async (tx) => {
+                // ON_THE_WAY is treated as work start in the mobile flow.
+                if (shouldMoveToInProgress) {
+                    await tx.update(ticketsTable)
+                        .set({ status: "IN_PROGRESS" })
+                        .where(eq(ticketsTable.id, id));
+                }
+
+                await tx.insert(activityLogsTable).values({
+                    ticketId: id,
+                    actorId: userId,
+                    action: "ON_THE_WAY",
+                    oldValue: ticket.status,
+                    newValue: shouldMoveToInProgress ? "IN_PROGRESS" : ticket.status,
+                    message: "Technician is on the way to the unit",
+                });
             });
 
             await sendNotification({
@@ -241,6 +264,52 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     title: "Issue Resolved ✅",
                     message: `Your ticket "${ticket.title}" has been marked as resolved. Please rate your experience.`,
                     type: "COMPLETION_SUBMITTED",
+                }),
+            ]);
+        }
+
+        // ── VERIFY_DONE ──────────────────────────────────────────────────────────
+        else if (parsed.action === "VERIFY_DONE") {
+            if (!isManager) {
+                return NextResponse.json({ message: "Only managers can verify completion" }, { status: 403 });
+            }
+            if (ticket.status !== "DONE") {
+                return NextResponse.json({ message: "Only DONE tickets can be verified" }, { status: 400 });
+            }
+
+            if (ticket.completionVerified) {
+                return NextResponse.json({ success: true, alreadyVerified: true });
+            }
+
+            await db.transaction(async (tx) => {
+                await tx.update(ticketsTable)
+                    .set({ completionVerified: true })
+                    .where(eq(ticketsTable.id, id));
+
+                await tx.insert(activityLogsTable).values({
+                    ticketId: id,
+                    actorId: userId,
+                    action: "STATUS_CHANGED",
+                    oldValue: "DONE",
+                    newValue: "DONE",
+                    message: "Manager verified completion and closed review",
+                });
+            });
+
+            await Promise.allSettled([
+                ticket.technicianId && sendNotification({
+                    userId: ticket.technicianId,
+                    ticketId: id,
+                    title: "Completion Verified ✅",
+                    message: `Manager verified your completion for "${ticket.title}".`,
+                    type: "STATUS_CHANGED",
+                }),
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Ticket Closed ✅",
+                    message: `Your ticket "${ticket.title}" has been verified and closed by the manager.`,
+                    type: "STATUS_CHANGED",
                 }),
             ]);
         }

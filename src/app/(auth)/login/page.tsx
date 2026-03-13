@@ -43,11 +43,11 @@ export default function LoginPage() {
 
         if (res?.error) {
             // Handle structured error codes from auth.ts
-            if (res.error.includes("ACCOUNT_PENDING") || res.error === "CredentialsSignin" && res.code === "ACCOUNT_PENDING") {
+            if (res.error.includes("ACCOUNT_PENDING") || (res.error === "CredentialsSignin" && res.code === "ACCOUNT_PENDING")) {
                 router.push("/pending?status=PENDING");
                 return;
             }
-            if (res.error.includes("ACCOUNT_REJECTED")) {
+            if (res.error.includes("ACCOUNT_REJECTED") || (res.error === "CredentialsSignin" && res.code === "ACCOUNT_REJECTED")) {
                 router.push("/pending?status=REJECTED");
                 return;
             }

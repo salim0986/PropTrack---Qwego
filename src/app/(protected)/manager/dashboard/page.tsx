@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { ticketsTable, usersTable } from "@/db/schema";
-import { eq, and, desc, inArray, not } from "drizzle-orm";
+import { ticketsTable } from "@/db/schema";
+import { desc, inArray, not } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -18,39 +18,33 @@ export default async function ManagerDashboard() {
 
     const userId = session.user.id;
 
-    // Get the manager's buildings
-    const manager = await db.query.usersTable.findFirst({
-        where: eq(usersTable.id, userId),
-        with: { managedBuildings: true },
-    });
-
-    const buildingIds = manager?.managedBuildings?.map(b => b.id) ?? [];
-
-    // All open tickets for managed buildings
-    const allTickets = buildingIds.length > 0 ? await db.query.ticketsTable.findMany({
-        where: and(
-            inArray(ticketsTable.buildingId, buildingIds),
-            not(inArray(ticketsTable.status, ["DONE", "CLOSED_DUPLICATE"]))
-        ),
+    // All tickets for manager view (includes completed)
+    const allTickets = await db.query.ticketsTable.findMany({
         orderBy: [desc(ticketsTable.updatedAt)],
         with: {
             building: { columns: { name: true } },
             tenant: { columns: { name: true } },
             technician: { columns: { name: true } },
         },
-    }) : [];
+    });
+
+    // Active subset still powers operational triage alerts/cards.
+    const activeTickets = allTickets.filter(
+        (t) => !["DONE", "CLOSED_DUPLICATE"].includes(t.status)
+    );
 
     // Categorize tickets for triage
     const now = new Date();
     const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
 
-    const stalledTickets = allTickets.filter(t =>
+    const stalledTickets = activeTickets.filter(t =>
         t.status === "ASSIGNED" && new Date(t.updatedAt) < fourHoursAgo
     );
-    const blockedTickets = allTickets.filter(t => t.status === "BLOCKED");
-    const overnightTickets = allTickets.filter(t => t.submittedAfterHours);
-    const urgentTickets = allTickets.filter(t => t.priority === "URGENT");
-    const unassignedTickets = allTickets.filter(t => t.status === "OPEN" && !t.technicianId);
+    const blockedTickets = activeTickets.filter(t => t.status === "BLOCKED");
+    const overnightTickets = activeTickets.filter(t => t.submittedAfterHours);
+    const urgentTickets = activeTickets.filter(t => t.priority === "URGENT");
+    const unassignedTickets = activeTickets.filter(t => t.status === "OPEN" && !t.technicianId);
+    const completedTickets = allTickets.filter(t => ["DONE", "CLOSED_DUPLICATE"].includes(t.status));
 
     const afterHours = isAfterHours();
 
@@ -100,7 +94,7 @@ export default async function ManagerDashboard() {
                     <div className="w-9 h-9 bg-pt-blue/10 rounded-xl flex items-center justify-center">
                         <LayoutDashboard className="w-4 h-4 text-pt-blue" />
                     </div>
-                    <p className="text-2xl font-bold text-pt-text">{allTickets.length}</p>
+                    <p className="text-2xl font-bold text-pt-text">{activeTickets.length}</p>
                     <p className="text-xs text-pt-text-muted">Total Active</p>
                 </Link>
 
@@ -129,11 +123,24 @@ export default async function ManagerDashboard() {
                 </Link>
             </div>
 
+            <Link href="/manager/tickets?filter=completed" className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex items-center justify-between hover:border-pt-accent/40 transition-colors">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-pt-green/10 rounded-xl flex items-center justify-center">
+                        <CheckCircle2 className="w-4 h-4 text-pt-green" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-pt-text">Completed Tickets</p>
+                        <p className="text-xs text-pt-text-muted">Done and duplicate-closed items</p>
+                    </div>
+                </div>
+                <p className="text-xl font-bold text-pt-text">{completedTickets.length}</p>
+            </Link>
+
             {/* All Tickets Feed */}
             <section>
                 <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-semibold text-pt-text-muted uppercase tracking-wider">
-                        Live Ticket Feed
+                        Latest Ticket Feed
                     </h2>
                     <Link href="/manager/tickets" className="text-xs text-pt-accent hover:underline">
                         See all

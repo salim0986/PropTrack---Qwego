@@ -1,10 +1,18 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/db";
 import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+
+class AccountPendingError extends CredentialsSignin {
+    code = "ACCOUNT_PENDING"
+}
+
+class AccountRejectedError extends CredentialsSignin {
+    code = "ACCOUNT_REJECTED"
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     providers: [
@@ -31,10 +39,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 // Block PENDING and REJECTED users with specific error codes
                 // The login page reads these to redirect to /pending
                 if (user.status === "PENDING") {
-                    throw new Error("ACCOUNT_PENDING");
+                    throw new AccountPendingError();
                 }
                 if (user.status === "REJECTED") {
-                    throw new Error("ACCOUNT_REJECTED");
+                    throw new AccountRejectedError();
                 }
 
                 const passwordsMatch = await bcrypt.compare(password, user.passwordHash);

@@ -87,9 +87,14 @@ export function NotificationsClient({
             ) : (
                 <div className="flex flex-col gap-2">
                     {notifications.map((notification) => {
-                        const ticketPath = notification.ticket
-                            ? `/${role.toLowerCase()}/${role === "TECHNICIAN" ? "tasks" : "tickets"}/${notification.ticket.id}`
-                            : null;
+                        let redirectPath = null;
+                        if (notification.ticket) {
+                            redirectPath = `/${role.toLowerCase()}/${role === "TECHNICIAN" ? "tasks" : "tickets"}/${notification.ticket.id}`;
+                        } else if (notification.type === "APPROVAL_REQUEST" && role === "MANAGER") {
+                            redirectPath = "/manager/registrations";
+                        } else if ((notification.type === "APPROVED" || notification.type === "REJECTED") && role === "TECHNICIAN") {
+                            redirectPath = "/technician/dashboard";
+                        }
 
                         return (
                             <div
@@ -114,10 +119,12 @@ export function NotificationsClient({
                                             {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                                         </p>
                                     </div>
-                                    {ticketPath && (
+                                    {redirectPath && (
                                         <Link
-                                            href={ticketPath}
-                                            onClick={(e) => e.stopPropagation()}
+                                            href={redirectPath}
+                                            onClick={(e) => {
+                                                if (!notification.read) markRead(notification.id);
+                                            }}
                                             className="shrink-0 text-pt-text-muted hover:text-pt-accent"
                                         >
                                             <ChevronRight className="w-4 h-4" />

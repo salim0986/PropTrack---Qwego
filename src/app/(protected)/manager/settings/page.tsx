@@ -294,7 +294,7 @@ export default function ManagerSettingsPage() {
             </section>
 
             {/* Save button */}
-            <div className="fixed bottom-0 left-0 right-0 bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4">
+            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 z-40">
                 <Button
                     onClick={saveSettings}
                     disabled={saving}

@@ -8,7 +8,6 @@ import { ArrowLeft, Camera, CheckCircle2, Loader2, X, Lock } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 
 const MIN_NOTES_LENGTH = 20;
 
@@ -35,16 +34,24 @@ export default function CompleteTicketPage() {
         // Auto-upload
         setUploading(true);
         try {
-            const supabase = createClient();
-            const ext = file.name.split(".").pop();
-            const path = `tickets/${id}/completion-${Date.now()}.${ext}`;
-            const { error } = await supabase.storage.from("proptrack").upload(path, file, { upsert: true });
-            if (error) throw error;
-            const { data } = supabase.storage.from("proptrack").getPublicUrl(path);
-            setUploadedUrl(data.publicUrl);
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            const res = await fetch("/api/uploads", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || "Upload failed");
+            }
+            
+            const data = await res.json();
+            setUploadedUrl(data.url);
             toast.success("Photo uploaded");
-        } catch {
-            toast.error("Upload failed — try again");
+        } catch (e: any) {
+            toast.error(e.message || "Upload failed — try again");
             setImagePreview(null);
         } finally {
             setUploading(false);
@@ -89,7 +96,7 @@ export default function CompleteTicketPage() {
                 <span className="font-semibold text-pt-text">Mark as Complete</span>
             </header>
 
-            <div className="flex flex-col gap-5 p-4 pb-40">
+            <div className="flex flex-col gap-5 p-4 pb-80">
 
                 {/* Progress Indicator */}
                 <div className="bg-pt-surface border border-pt-border rounded-2xl p-4">
@@ -217,7 +224,7 @@ export default function CompleteTicketPage() {
             </div>
 
             {/* Submit Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4">
+            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 z-40">
                 {!canSubmit && (
                     <div className="flex items-center gap-2 mb-3 justify-center">
                         <Lock className="w-3.5 h-3.5 text-pt-text-muted" />

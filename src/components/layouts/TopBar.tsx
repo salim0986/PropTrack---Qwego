@@ -1,8 +1,11 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
 import { LogOut, Bell, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface TopBarProps {
     title?: string;
@@ -11,6 +14,20 @@ interface TopBarProps {
 
 export function TopBar({ title = "PropTrack", showBack = false }: TopBarProps) {
     const { data: session } = useSession();
+    const pathname = usePathname();
+    const [hasUnread, setHasUnread] = useState(false);
+
+    useEffect(() => {
+        if (!session?.user) return;
+        fetch("/api/notifications")
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    setHasUnread(data.some(n => !n.read));
+                }
+            })
+            .catch(() => {});
+    }, [session?.user, pathname]); // Refetch on route change
 
     return (
         <header className="sticky top-0 z-50 w-full bg-pt-surface/80 backdrop-blur-md border-b border-pt-border flex items-center h-14 px-4">
@@ -21,11 +38,14 @@ export function TopBar({ title = "PropTrack", showBack = false }: TopBarProps) {
             </div>
 
             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="text-pt-text-dim hover:text-pt-text relative">
-                    <Bell className="w-5 h-5" />
-                    {/* Simulated unread dot */}
-                    <span className="absolute top-2 right-2.5 w-2 h-2 bg-pt-accent rounded-full border-2 border-pt-surface"></span>
-                </Button>
+                <Link href="/notifications">
+                    <Button variant="ghost" size="icon" className="text-pt-text-dim hover:text-pt-text relative">
+                        <Bell className="w-5 h-5" />
+                        {hasUnread && (
+                            <span className="absolute top-2 right-2.5 w-2 h-2 bg-pt-accent rounded-full border-2 border-pt-surface"></span>
+                        )}
+                    </Button>
+                </Link>
 
                 {session && (
                     <Button

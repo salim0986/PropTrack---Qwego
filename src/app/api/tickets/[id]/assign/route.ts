@@ -41,6 +41,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
         if (!ticket) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
+        if (["DONE", "CLOSED_DUPLICATE"].includes(ticket.status)) {
+            return NextResponse.json(
+                { message: "Cannot assign a completed ticket. Reopen it first." },
+                { status: 400 }
+            );
+        }
+
         // Detect real specialty mismatch: does tech's specialties match ticket category?
         const techSpecialties = tech.specialties ?? [];
         const ticketCategory = ticket.category; // e.g. "PLUMBING"
@@ -64,11 +71,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const userId = session.user.id;
         const isReassignment = !!ticket.technicianId;
+        const isSameTechnician = ticket.technicianId === technicianId;
+        const nextStatus = isSameTechnician ? ticket.status : "ASSIGNED";
 
         await db.transaction(async (tx) => {
-            await tx.update(ticketsTable)
-                .set({ technicianId, status: "ASSIGNED" })
-                .where(eq(ticketsTable.id, id));
+            if (!isSameTechnician) {
+                await tx.update(ticketsTable)
+                    .set({ technicianId, status: nextStatus })
+                    .where(eq(ticketsTable.id, id));
+            }
 
             // Notify previously assigned tech of unassignment
             if (isReassignment && ticket.technicianId !== technicianId) {
@@ -81,26 +92,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 });
             }
 
-            await tx.insert(activityLogsTable).values({
-                ticketId: id,
-                actorId: userId,
-                action: isMismatch ? "MISMATCH_ASSIGNED" : "ASSIGNED",
-                oldValue: ticket.technicianId ?? undefined,
-                newValue: technicianId,
-                message: isMismatch
-                    ? `Manager assigned mismatched technician — acknowledged. ${tech.name} (${techSpecialties.join(", ")}) assigned to ${ticketCategory} ticket.`
-                    : `Assigned to ${tech.name}`,
-            });
+            if (!isSameTechnician) {
+                await tx.insert(activityLogsTable).values({
+                    ticketId: id,
+                    actorId: userId,
+                    action: isMismatch ? "MISMATCH_ASSIGNED" : "ASSIGNED",
+                    oldValue: ticket.technicianId ?? undefined,
+                    newValue: technicianId,
+                    message: isMismatch
+                        ? `Manager assigned mismatched technician — acknowledged. ${tech.name} (${techSpecialties.join(", ")}) assigned to ${ticketCategory} ticket.`
+                        : `Assigned to ${tech.name}`,
+                });
+            }
         });
 
         // Notify newly assigned technician
-        await sendNotification({
-            userId: technicianId,
-            ticketId: id,
-            title: "New Ticket Assigned 🔧",
-            message: `You've been assigned: "${ticket.title}" (Unit ${ticket.unitNumber})`,
-            type: "TICKET_ASSIGNED",
-        });
+        if (!isSameTechnician) {
+            await sendNotification({
+                userId: technicianId,
+                ticketId: id,
+                title: "New Ticket Assigned 🔧",
+                message: `You've been assigned: "${ticket.title}" (Unit ${ticket.unitNumber})`,
+                type: "TICKET_ASSIGNED",
+            });
+        }
 
         // If reassignment, notify old technician of unassignment
         if (isReassignment && ticket.technicianId && ticket.technicianId !== technicianId) {
@@ -113,7 +128,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            status: nextStatus,
+            unchangedAssignment: isSameTechnician,
+        });
 
     } catch (error: any) {
         if (error?.name === "ZodError" || error?.issues) {

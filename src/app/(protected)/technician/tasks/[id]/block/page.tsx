@@ -56,7 +56,7 @@ export default function BlockTicketPage() {
                 <span className="font-semibold text-pt-text">Block Ticket</span>
             </header>
 
-            <div className="flex flex-col gap-5 p-4 pb-32">
+            <div className="flex flex-col gap-5 p-4 pb-72">
                 {/* Warning banner */}
                 <div className="bg-pt-red/10 border border-pt-red/30 rounded-2xl p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-pt-red shrink-0 mt-0.5" />
@@ -105,7 +105,7 @@ export default function BlockTicketPage() {
             </div>
 
             {/* Submit Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4">
+            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 z-40">
                 <Button
                     onClick={handleBlock}
                     disabled={!canSubmit || loading}

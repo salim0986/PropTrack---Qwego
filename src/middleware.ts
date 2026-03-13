@@ -6,7 +6,7 @@ export default auth((req) => {
     const session = req.auth;
 
     // Public routes - allow through
-    const publicPaths = ["/login", "/register", "/pending"];
+    const publicPaths = ["/login", "/register", "/pending", "/api/buildings"];
     if (publicPaths.some((p) => pathname.startsWith(p))) {
         // If already logged in and tries to visit auth pages → redirect to dashboard
         if (session?.user) {

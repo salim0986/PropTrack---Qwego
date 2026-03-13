@@ -1,14 +1,14 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { ticketsTable, usersTable } from "@/db/schema";
-import { eq, and, inArray, not, desc } from "drizzle-orm";
+import { ticketsTable } from "@/db/schema";
+import { desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import { ArrowLeft } from "lucide-react";
 
-type FilterType = "all" | "unassigned" | "blocked" | "stalled" | "overnight" | "urgent";
+type FilterType = "all" | "completed" | "unassigned" | "blocked" | "stalled" | "overnight" | "urgent";
 
 export default async function ManagerTicketListPage({
     searchParams,
@@ -19,27 +19,15 @@ export default async function ManagerTicketListPage({
     if (!session?.user?.id) redirect("/login");
 
     const { filter = "all" } = await searchParams;
-    const userId = session.user.id;
 
-    const manager = await db.query.usersTable.findFirst({
-        where: eq(usersTable.id, userId),
-        with: { managedBuildings: true },
-    });
-
-    const buildingIds = manager?.managedBuildings?.map(b => b.id) ?? [];
-
-    const tickets = buildingIds.length > 0 ? await db.query.ticketsTable.findMany({
-        where: and(
-            inArray(ticketsTable.buildingId, buildingIds),
-            not(inArray(ticketsTable.status, ["DONE", "CLOSED_DUPLICATE"]))
-        ),
+    const tickets = await db.query.ticketsTable.findMany({
         orderBy: [desc(ticketsTable.updatedAt)],
         with: {
             building: { columns: { name: true } },
             tenant: { columns: { name: true } },
             technician: { columns: { name: true } },
         },
-    }) : [];
+    });
 
     const now = new Date();
     const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
@@ -50,11 +38,13 @@ export default async function ManagerTicketListPage({
         if (filter === "stalled") return t.status === "ASSIGNED" && new Date(t.updatedAt) < fourHoursAgo;
         if (filter === "overnight") return t.submittedAfterHours;
         if (filter === "urgent") return t.priority === "URGENT";
+        if (filter === "completed") return ["DONE", "CLOSED_DUPLICATE"].includes(t.status);
         return true;
     });
 
     const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
         { value: "all", label: "All" },
+        { value: "completed", label: "Completed" },
         { value: "unassigned", label: "Unassigned" },
         { value: "blocked", label: "Blocked" },
         { value: "stalled", label: "Stalled" },

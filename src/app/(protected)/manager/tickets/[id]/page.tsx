@@ -28,6 +28,14 @@ interface ActivityLog {
     actor: { name: string; role: string; };
 }
 
+interface DuplicateCandidate {
+    id: string;
+    title: string;
+    status: string;
+    unitNumber?: string;
+    updatedAt?: string;
+}
+
 interface TicketDetail {
     id: string;
     title: string;
@@ -61,7 +69,9 @@ export default function ManagerTicketDetail() {
     const [action, setAction] = useState<ManagerAction>(null);
     const [selectedTech, setSelectedTech] = useState<string>("");
     const [disputeNote, setDisputeNote] = useState("");
+    const [unblockNote, setUnblockNote] = useState("");
     const [dupTicketId, setDupTicketId] = useState("");
+    const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [showLogs, setShowLogs] = useState(false);
     const [showImages, setShowImages] = useState(false);
@@ -70,29 +80,60 @@ export default function ManagerTicketDetail() {
         Promise.all([
             fetch(`/api/tickets/${id}/detail`).then(r => r.json()),
             fetch("/api/technicians").then(r => r.json()),
-        ]).then(([tkt, techs]) => {
+            fetch("/api/tickets").then(r => r.json()),
+        ]).then(([tkt, techs, allTickets]) => {
             setTicket(tkt);
             setTechnicians(techs);
+            setDuplicateCandidates(Array.isArray(allTickets) ? allTickets : []);
             setLoading(false);
         });
     }, [id]);
 
-    async function handleAssign() {
+    async function handleAssign(acknowledgedMismatch = false) {
         if (!selectedTech) return;
         setSubmitting(true);
         try {
             const res = await fetch(`/api/tickets/${id}/assign`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ technicianId: selectedTech }),
+                body: JSON.stringify({ technicianId: selectedTech, acknowledgedMismatch }),
             });
-            if (!res.ok) throw new Error();
-            toast.success("Ticket assigned!");
+
+            if (res.status === 409) {
+                const data = await res.json();
+                if (data.requiresMismatchAck) {
+                    toast.warning("Specialty Mismatch", {
+                        description: data.message,
+                        duration: 10000,
+                        action: {
+                            label: "Confirm anyway",
+                            onClick: () => handleAssign(true),
+                        },
+                        cancel: {
+                            label: "Cancel",
+                            onClick: () => {}, // just dismisses
+                        },
+                    });
+                    return; // Stop here, handleAssign will be called again on confirm
+                }
+            } else if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || "Assignment failed");
+            }
+
+            const data = await res.json();
+
+            toast.success(data.unchangedAssignment ? "Technician unchanged" : "Ticket assigned!");
             const tech = technicians.find(t => t.id === selectedTech);
-            setTicket(prev => prev ? { ...prev, technicianId: selectedTech, technician: { name: tech?.name ?? "" }, status: "ASSIGNED" } : prev);
+            setTicket(prev => prev ? {
+                ...prev,
+                technicianId: selectedTech,
+                technician: { name: tech?.name ?? "" },
+                status: data.status ?? prev.status,
+            } : prev);
             setAction(null);
-        } catch {
-            toast.error("Assignment failed");
+        } catch (e: any) {
+            toast.error(e.message || "Assignment failed");
         } finally {
             setSubmitting(false);
         }
@@ -126,11 +167,14 @@ export default function ManagerTicketDetail() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ duplicateOfId: dupTicketId }),
             });
-            if (!res.ok) throw new Error();
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || "Failed to close as duplicate");
+            }
             toast.success("Ticket closed as duplicate");
             router.push("/manager/dashboard");
-        } catch {
-            toast.error("Failed");
+        } catch (e: any) {
+            toast.error(e.message || "Failed");
         } finally {
             setSubmitting(false);
         }
@@ -149,6 +193,11 @@ export default function ManagerTicketDetail() {
     const OTHER_TECHS = technicians.filter(t =>
         t.specialties && !t.specialties.includes(ticket.category as any)
     );
+    const duplicateOptions = duplicateCandidates
+        .filter((t) => t.id !== ticket.id && t.status !== "CLOSED_DUPLICATE")
+        .slice(0, 6);
+    const canAssign = !["DONE", "CLOSED_DUPLICATE"].includes(ticket.status);
+    const selectingSameTech = !!ticket.technicianId && selectedTech === ticket.technicianId;
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -160,7 +209,7 @@ export default function ManagerTicketDetail() {
                 <StatusBadge status={ticket.status as any} />
             </header>
 
-            <div className="flex flex-col gap-4 p-4 pb-64">
+            <div className="flex flex-col gap-4 p-4 pb-80">
 
                 {/* Ticket Info */}
                 <div>
@@ -286,6 +335,7 @@ export default function ManagerTicketDetail() {
                                                     selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text hover:border-pt-accent/40"
                                                 )}>
                                                 {t.name}
+                                                {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
                                                 {t.specialties && <span className="text-xs text-pt-text-muted ml-2">({t.specialties.join(", ")})</span>}
                                             </button>
                                         ))}
@@ -302,14 +352,20 @@ export default function ManagerTicketDetail() {
                                                     selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text"
                                                 )}>
                                                 {t.name}
+                                                {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             )}
+                            {selectingSameTech && (
+                                <p className="text-xs text-pt-text-muted">
+                                    This technician is already assigned. Choose a different technician to reassign.
+                                </p>
+                            )}
                             <div className="flex gap-2 pt-1">
                                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={handleAssign} disabled={!selectedTech || submitting}
+                                <Button onClick={() => handleAssign(false)} disabled={!selectedTech || selectingSameTech || submitting}
                                     className="flex-1 rounded-xl bg-pt-accent hover:bg-pt-accent/90 text-white">
                                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm"}
                                 </Button>
@@ -328,9 +384,28 @@ export default function ManagerTicketDetail() {
                                 className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
                             <div className="flex gap-2">
                                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={() => handleStatusAction("REOPEN")} disabled={submitting}
+                                <Button onClick={() => handleStatusAction("REOPEN", { reason: disputeNote })} disabled={submitting}
                                     className="flex-1 rounded-xl bg-pt-red hover:bg-pt-red/90 text-white">
                                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Dispute & Reopen"}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* Unblock Panel */}
+                    {action === "unblock" && (
+                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                            className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
+                        >
+                            <p className="text-sm font-semibold text-pt-text">Unblock Ticket</p>
+                            <Textarea value={unblockNote} onChange={e => setUnblockNote(e.target.value)}
+                                placeholder="Describe how the block was resolved..." rows={3}
+                                className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
+                            <div className="flex gap-2">
+                                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
+                                <Button onClick={() => handleStatusAction("UNBLOCK", { unblockNote })} disabled={submitting || unblockNote.length < 10}
+                                    className="flex-1 rounded-xl bg-pt-green hover:bg-pt-green/90 text-white">
+                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Unblock"}
                                 </Button>
                             </div>
                         </motion.div>
@@ -342,10 +417,29 @@ export default function ManagerTicketDetail() {
                             className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
                         >
                             <p className="text-sm font-semibold text-pt-text">Close as Duplicate</p>
-                            <p className="text-xs text-pt-text-muted">Enter the ID of the original ticket this duplicates.</p>
+                            <p className="text-xs text-pt-text-muted">Select the original ticket below, or paste its ID manually.</p>
                             <input value={dupTicketId} onChange={e => setDupTicketId(e.target.value)}
                                 placeholder="Original Ticket ID..."
                                 className="bg-pt-surface-light border border-pt-border/60 rounded-xl px-3 py-2.5 text-sm text-pt-text focus:outline-none focus:ring-2 focus:ring-pt-accent/50" />
+                            {duplicateOptions.length > 0 && (
+                                <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                                    {duplicateOptions.map((opt) => (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => setDupTicketId(opt.id)}
+                                            className={cn(
+                                                "text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
+                                                dupTicketId === opt.id
+                                                    ? "border-pt-accent bg-pt-accent/10 text-pt-accent"
+                                                    : "border-pt-border bg-pt-surface-light text-pt-text"
+                                            )}
+                                        >
+                                            <p className="font-medium truncate">{opt.title}</p>
+                                            <p className="text-[11px] text-pt-text-muted">#{opt.id.slice(0, 8)} · {opt.status}{opt.unitNumber ? ` · Unit ${opt.unitNumber}` : ""}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex gap-2">
                                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
                                 <Button onClick={handleCloseDuplicate} disabled={!dupTicketId || submitting}
@@ -359,17 +453,19 @@ export default function ManagerTicketDetail() {
             </div>
 
             {/* Action Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 flex flex-col gap-2">
+            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 flex flex-col gap-2 z-40">
                 {/* Primary Actions */}
                 <div className="flex gap-2">
-                    <Button onClick={() => setAction("assign")} variant="outline"
-                        className="flex-1 h-12 rounded-xl border-pt-accent/40 text-pt-accent hover:bg-pt-accent/10 font-medium">
-                        <User className="w-4 h-4 mr-1.5" />
-                        {ticket.technicianId ? "Reassign" : "Assign"}
-                    </Button>
+                    {canAssign && (
+                        <Button onClick={() => setAction("assign")} variant="outline"
+                            className="flex-1 h-12 rounded-xl border-pt-accent/40 text-pt-accent hover:bg-pt-accent/10 font-medium">
+                            <User className="w-4 h-4 mr-1.5" />
+                            {ticket.technicianId ? "Reassign" : "Assign"}
+                        </Button>
+                    )}
 
                     {ticket.status === "BLOCKED" && (
-                        <Button onClick={() => handleStatusAction("UNBLOCK")} disabled={submitting}
+                        <Button onClick={() => setAction("unblock")} disabled={submitting}
                             className="flex-1 h-12 rounded-xl bg-pt-green hover:bg-pt-green/90 text-white font-medium">
                             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RefreshCw className="w-4 h-4 mr-1.5" /> Unblock</>}
                         </Button>

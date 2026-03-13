@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { ticketsTable, ticketImagesTable, activityLogsTable, usersTable, buildingsTable } from "@/db/schema";
 import { ticketSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
-import { eq, inArray, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { sendNotification } from "@/lib/notify";
 import { isAfterHours } from "@/lib/after-hours";
 
@@ -19,23 +19,15 @@ export async function GET() {
         let tickets: any[] = [];
 
         if (role === "MANAGER") {
-            // Manager sees all tickets in their managed buildings
-            const manager = await db.query.usersTable.findFirst({
-                where: eq(usersTable.id, userId),
-                with: { managedBuildings: { columns: { id: true } } },
+            // Manager sees all tickets
+            tickets = await db.query.ticketsTable.findMany({
+                orderBy: [desc(ticketsTable.updatedAt)],
+                with: {
+                    building: { columns: { name: true } },
+                    tenant: { columns: { name: true } },
+                    technician: { columns: { name: true } },
+                },
             });
-            const buildingIds = manager?.managedBuildings?.map((b: any) => b.id) ?? [];
-            if (buildingIds.length > 0) {
-                tickets = await db.query.ticketsTable.findMany({
-                    where: buildingIds.length > 0 ? inArray(ticketsTable.buildingId, buildingIds) : undefined,
-                    orderBy: [desc(ticketsTable.updatedAt)],
-                    with: {
-                        building: { columns: { name: true } },
-                        tenant: { columns: { name: true } },
-                        technician: { columns: { name: true } },
-                    },
-                });
-            }
         } else if (role === "TENANT") {
             // Tenant sees only their own tickets
             tickets = await db.query.ticketsTable.findMany({
