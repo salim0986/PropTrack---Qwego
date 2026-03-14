@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Hoisted mocks ──────────────────────────────────────────────────────────
 const { mockFindFirstTicket, mockFindFirstActivityLog } = vi.hoisted(() => ({
     mockFindFirstTicket: vi.fn(),
-    mockFindFirstActivityLog: vi.fn(() => null), // null = no existing log (on_the_way not already sent)
+    mockFindFirstActivityLog: vi.fn(async () => null as { id: string; action: string } | null), // null = no existing log (on_the_way not already sent)
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
@@ -15,6 +15,11 @@ vi.mock("@/db", () => ({
             ticketsTable: { findFirst: mockFindFirstTicket },
             activityLogsTable: { findFirst: mockFindFirstActivityLog },
         },
+        update: vi.fn(() => ({
+            set: vi.fn(() => ({
+                where: vi.fn(() => Promise.resolve()),
+            })),
+        })),
         insert: vi.fn(() => ({ values: vi.fn(() => Promise.resolve()) })),
         transaction: vi.fn(async (cb: any) => {
             const mockTx = {

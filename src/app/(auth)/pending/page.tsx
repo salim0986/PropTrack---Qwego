@@ -2,10 +2,11 @@
 
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, XCircle, Building, ArrowRight, Loader2 } from "lucide-react";
+import { Clock, XCircle, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Suspense } from "react";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 
 function PendingContent() {
     const searchParams = useSearchParams();
@@ -60,7 +61,7 @@ function PendingContent() {
                     {isPending && (
                         <div className="w-full bg-pt-surface-light border border-pt-border rounded-xl p-4 mb-6 flex items-center gap-3">
                             <div className="w-8 h-8 bg-pt-yellow/10 rounded-xl flex items-center justify-center shrink-0">
-                                <Building className="w-4 h-4 text-pt-yellow" />
+                                <BrandLogo className="w-4 h-4 rounded-sm" />
                             </div>
                             <div className="text-left">
                                 <p className="text-xs text-pt-text-muted">Application Status</p>

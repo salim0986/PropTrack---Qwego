@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { buildingsTable, escalationRulesTable } from "@/db/schema";
+import { buildingsTable, escalationRulesTable, usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,13 +12,39 @@ const ruleSchema = z.object({
     enabled: z.boolean().default(true),
 });
 
+async function resolveManagerDbId(session: any): Promise<string | null> {
+    if (!session?.user?.id || session.user.role !== "MANAGER") return null;
+
+    const byId = await db.query.usersTable.findFirst({
+        where: eq(usersTable.id, session.user.id),
+        columns: { id: true, role: true },
+    });
+    if (byId?.role === "MANAGER") return byId.id;
+
+    if (!session.user.email) return null;
+    const byEmail = await db.query.usersTable.findFirst({
+        where: eq(usersTable.email, session.user.email),
+        columns: { id: true, role: true },
+    });
+    return byEmail?.role === "MANAGER" ? byEmail.id : null;
+}
+
 // GET /api/buildings/[id]/escalation-rules
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const session = await auth();
-        if (!session?.user?.id || session.user.role !== "MANAGER") {
+        const managerDbId = await resolveManagerDbId(session);
+        if (!managerDbId) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        const building = await db.query.buildingsTable.findFirst({
+            where: eq(buildingsTable.id, id),
+            columns: { managerId: true },
+        });
+        if (!building || building.managerId !== managerDbId) {
+            return NextResponse.json({ message: "Not authorized for this building" }, { status: 403 });
         }
 
         const rules = await db.query.escalationRulesTable.findMany({
@@ -37,7 +63,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const { id } = await params;
         const session = await auth();
-        if (!session?.user?.id || session.user.role !== "MANAGER") {
+        const managerDbId = await resolveManagerDbId(session);
+        if (!managerDbId) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -45,7 +72,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             where: eq(buildingsTable.id, id),
             columns: { managerId: true },
         });
-        if (!building || building.managerId !== session.user.id) {
+        if (!building || building.managerId !== managerDbId) {
             return NextResponse.json({ message: "Not authorized for this building" }, { status: 403 });
         }
 

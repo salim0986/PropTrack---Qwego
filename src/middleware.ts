@@ -5,9 +5,24 @@ export default auth((req) => {
     const { pathname } = req.nextUrl;
     const session = req.auth;
 
-    // Public routes - allow through
-    const publicPaths = ["/login", "/register", "/pending", "/api/buildings"];
-    if (publicPaths.some((p) => pathname.startsWith(p))) {
+    // Public API route - always allow through (used by registration and manager settings fetches)
+    if (pathname.startsWith("/api/buildings")) {
+        return NextResponse.next();
+    }
+
+    // Telegram webhook must be publicly reachable by Telegram servers.
+    if (pathname.startsWith("/api/telegram/webhook")) {
+        return NextResponse.next();
+    }
+
+    // Cron endpoints perform their own bearer-token auth using CRON_SECRET.
+    if (pathname.startsWith("/api/cron/")) {
+        return NextResponse.next();
+    }
+
+    // Public auth routes - allow through
+    const authPages = ["/login", "/register", "/pending"];
+    if (authPages.some((p) => pathname.startsWith(p))) {
         // If already logged in and tries to visit auth pages → redirect to dashboard
         if (session?.user) {
             const role = session.user.role;

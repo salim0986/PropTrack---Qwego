@@ -198,6 +198,7 @@ export default function ManagerTicketDetail() {
         .slice(0, 6);
     const canAssign = !["DONE", "CLOSED_DUPLICATE"].includes(ticket.status);
     const selectingSameTech = !!ticket.technicianId && selectedTech === ticket.technicianId;
+    const isDialogOpen = action !== null;
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -316,148 +317,186 @@ export default function ManagerTicketDetail() {
                     </AnimatePresence>
                 </section>
 
-                {/* ─── Action Panels ─── */}
-
-                {/* Assign Panel */}
-                <AnimatePresence>
-                    {action === "assign" && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                            className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
-                        >
-                            <p className="text-sm font-semibold text-pt-text">Assign to Technician</p>
-                            {MATCHED_TECHS.length > 0 && (
-                                <div>
-                                    <p className="text-xs text-pt-green font-semibold mb-2">⭐ Recommended (Matching Specialty)</p>
-                                    <div className="flex flex-col gap-2">
-                                        {MATCHED_TECHS.map(t => (
-                                            <button key={t.id} onClick={() => setSelectedTech(t.id)}
-                                                className={cn("text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
-                                                    selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text hover:border-pt-accent/40"
-                                                )}>
-                                                {t.name}
-                                                {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
-                                                {t.specialties && <span className="text-xs text-pt-text-muted ml-2">({t.specialties.join(", ")})</span>}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {OTHER_TECHS.length > 0 && (
-                                <div>
-                                    <p className="text-xs text-pt-text-muted font-semibold mb-2">Other Technicians</p>
-                                    <div className="flex flex-col gap-2">
-                                        {OTHER_TECHS.map(t => (
-                                            <button key={t.id} onClick={() => setSelectedTech(t.id)}
-                                                className={cn("text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
-                                                    selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text"
-                                                )}>
-                                                {t.name}
-                                                {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {selectingSameTech && (
-                                <p className="text-xs text-pt-text-muted">
-                                    This technician is already assigned. Choose a different technician to reassign.
-                                </p>
-                            )}
-                            <div className="flex gap-2 pt-1">
-                                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={() => handleAssign(false)} disabled={!selectedTech || selectingSameTech || submitting}
-                                    className="flex-1 rounded-xl bg-pt-accent hover:bg-pt-accent/90 text-white">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm"}
-                                </Button>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* Dispute Panel */}
-                    {action === "dispute" && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                            className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
-                        >
-                            <p className="text-sm font-semibold text-pt-text">Dispute Completion</p>
-                            <Textarea value={disputeNote} onChange={e => setDisputeNote(e.target.value)}
-                                placeholder="Describe why this completion is disputed..." rows={3}
-                                className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
-                            <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={() => handleStatusAction("REOPEN", { reason: disputeNote })} disabled={submitting}
-                                    className="flex-1 rounded-xl bg-pt-red hover:bg-pt-red/90 text-white">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Dispute & Reopen"}
-                                </Button>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* Unblock Panel */}
-                    {action === "unblock" && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                            className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
-                        >
-                            <p className="text-sm font-semibold text-pt-text">Unblock Ticket</p>
-                            <Textarea value={unblockNote} onChange={e => setUnblockNote(e.target.value)}
-                                placeholder="Describe how the block was resolved..." rows={3}
-                                className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
-                            <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={() => handleStatusAction("UNBLOCK", { unblockNote })} disabled={submitting || unblockNote.length < 10}
-                                    className="flex-1 rounded-xl bg-pt-green hover:bg-pt-green/90 text-white">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Unblock"}
-                                </Button>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* Close as Duplicate */}
-                    {action === "close_dup" && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                            className="bg-pt-surface border border-pt-border rounded-2xl p-4 flex flex-col gap-3"
-                        >
-                            <p className="text-sm font-semibold text-pt-text">Close as Duplicate</p>
-                            <p className="text-xs text-pt-text-muted">Select the original ticket below, or paste its ID manually.</p>
-                            <input value={dupTicketId} onChange={e => setDupTicketId(e.target.value)}
-                                placeholder="Original Ticket ID..."
-                                className="bg-pt-surface-light border border-pt-border/60 rounded-xl px-3 py-2.5 text-sm text-pt-text focus:outline-none focus:ring-2 focus:ring-pt-accent/50" />
-                            {duplicateOptions.length > 0 && (
-                                <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
-                                    {duplicateOptions.map((opt) => (
-                                        <button
-                                            key={opt.id}
-                                            onClick={() => setDupTicketId(opt.id)}
-                                            className={cn(
-                                                "text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
-                                                dupTicketId === opt.id
-                                                    ? "border-pt-accent bg-pt-accent/10 text-pt-accent"
-                                                    : "border-pt-border bg-pt-surface-light text-pt-text"
-                                            )}
-                                        >
-                                            <p className="font-medium truncate">{opt.title}</p>
-                                            <p className="text-[11px] text-pt-text-muted">#{opt.id.slice(0, 8)} · {opt.status}{opt.unitNumber ? ` · Unit ${opt.unitNumber}` : ""}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
-                                <Button onClick={handleCloseDuplicate} disabled={!dupTicketId || submitting}
-                                    className="flex-1 rounded-xl bg-pt-surface-light text-pt-text-muted border border-pt-border">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Close as Duplicate"}
-                                </Button>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
 
+            <AnimatePresence>
+                {isDialogOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[120]"
+                    >
+                        <button
+                            type="button"
+                            aria-label="Close action dialog"
+                            className="absolute inset-0 bg-black/35"
+                            onClick={() => setAction(null)}
+                        />
+
+                        <motion.div
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", stiffness: 320, damping: 30 }}
+                            className="absolute left-1/2 -translate-x-1/2 bottom-0 w-full max-w-[430px] rounded-t-3xl border-x border-t border-pt-border bg-pt-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-h-[86svh] overflow-y-auto shadow-2xl"
+                        >
+                            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-pt-border" />
+
+                            {action === "assign" && (
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <p className="text-base font-semibold text-pt-text">Assign to Technician</p>
+                                        <p className="text-xs text-pt-text-muted mt-1">Select a technician to assign this ticket.</p>
+                                    </div>
+
+                                    {MATCHED_TECHS.length > 0 && (
+                                        <div>
+                                            <p className="text-xs text-pt-green font-semibold mb-2">Recommended (Matching Specialty)</p>
+                                            <div className="flex flex-col gap-2">
+                                                {MATCHED_TECHS.map(t => (
+                                                    <button key={t.id} onClick={() => setSelectedTech(t.id)}
+                                                        className={cn("text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
+                                                            selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text hover:border-pt-accent/40"
+                                                        )}>
+                                                        {t.name}
+                                                        {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
+                                                        {t.specialties && <span className="text-xs text-pt-text-muted ml-2">({t.specialties.join(", ")})</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {OTHER_TECHS.length > 0 && (
+                                        <div>
+                                            <p className="text-xs text-pt-text-muted font-semibold mb-2">Other Technicians</p>
+                                            <div className="flex flex-col gap-2">
+                                                {OTHER_TECHS.map(t => (
+                                                    <button key={t.id} onClick={() => setSelectedTech(t.id)}
+                                                        className={cn("text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
+                                                            selectedTech === t.id ? "border-pt-accent bg-pt-accent/10 text-pt-accent" : "border-pt-border bg-pt-surface-light text-pt-text"
+                                                        )}>
+                                                        {t.name}
+                                                        {ticket.technicianId === t.id && <span className="text-xs text-pt-text-muted ml-2">(currently assigned)</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectingSameTech && (
+                                        <p className="text-xs text-pt-text-muted">
+                                            This technician is already assigned. Choose a different technician to reassign.
+                                        </p>
+                                    )}
+
+                                    <div className="flex gap-2 pt-1">
+                                        <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
+                                        <Button onClick={() => handleAssign(false)} disabled={!selectedTech || selectingSameTech || submitting}
+                                            className="flex-1 rounded-xl bg-pt-accent hover:bg-pt-accent/90 text-white">
+                                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {action === "dispute" && (
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <p className="text-base font-semibold text-pt-text">Dispute Completion</p>
+                                        <p className="text-xs text-pt-text-muted mt-1">Provide a reason to reopen this completed ticket.</p>
+                                    </div>
+
+                                    <Textarea value={disputeNote} onChange={e => setDisputeNote(e.target.value)}
+                                        placeholder="Describe why this completion is disputed..." rows={3} autoFocus
+                                        className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
+
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
+                                        <Button onClick={() => handleStatusAction("REOPEN", { reason: disputeNote })} disabled={submitting}
+                                            className="flex-1 rounded-xl bg-pt-red hover:bg-pt-red/90 text-white">
+                                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Dispute & Reopen"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {action === "unblock" && (
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <p className="text-base font-semibold text-pt-text">Unblock Ticket</p>
+                                        <p className="text-xs text-pt-text-muted mt-1">Add a note explaining how the block is resolved.</p>
+                                    </div>
+
+                                    <Textarea value={unblockNote} onChange={e => setUnblockNote(e.target.value)}
+                                        placeholder="Describe how the block was resolved..." rows={3} autoFocus
+                                        className="bg-pt-surface-light border-pt-border/60 rounded-xl resize-none text-sm" />
+
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
+                                        <Button onClick={() => handleStatusAction("UNBLOCK", { unblockNote })} disabled={submitting || unblockNote.length < 10}
+                                            className="flex-1 rounded-xl bg-pt-green hover:bg-pt-green/90 text-white">
+                                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Unblock"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {action === "close_dup" && (
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <p className="text-base font-semibold text-pt-text">Close as Duplicate</p>
+                                        <p className="text-xs text-pt-text-muted mt-1">Select the original ticket or paste its ticket ID.</p>
+                                    </div>
+
+                                    <input value={dupTicketId} onChange={e => setDupTicketId(e.target.value)}
+                                        placeholder="Original Ticket ID..." autoFocus
+                                        className="bg-pt-surface-light border border-pt-border/60 rounded-xl px-3 py-2.5 text-sm text-pt-text focus:outline-none focus:ring-2 focus:ring-pt-accent/50" />
+
+                                    {duplicateOptions.length > 0 && (
+                                        <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
+                                            {duplicateOptions.map((opt) => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => setDupTicketId(opt.id)}
+                                                    className={cn(
+                                                        "text-left px-3 py-2.5 rounded-xl border text-sm transition-all",
+                                                        dupTicketId === opt.id
+                                                            ? "border-pt-accent bg-pt-accent/10 text-pt-accent"
+                                                            : "border-pt-border bg-pt-surface-light text-pt-text"
+                                                    )}
+                                                >
+                                                    <p className="font-medium truncate">{opt.title}</p>
+                                                    <p className="text-[11px] text-pt-text-muted">#{opt.id.slice(0, 8)} · {opt.status}{opt.unitNumber ? ` · Unit ${opt.unitNumber}` : ""}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAction(null)}>Cancel</Button>
+                                        <Button onClick={handleCloseDuplicate} disabled={!dupTicketId || submitting}
+                                            className="flex-1 rounded-xl bg-pt-surface-light text-pt-text-muted border border-pt-border">
+                                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Close as Duplicate"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Action Bar */}
-            <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 flex flex-col gap-2 z-40">
+            <div className={cn(
+                "fixed left-1/2 -translate-x-1/2 w-full max-w-[430px] bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] bg-pt-surface/95 backdrop-blur-md border-t border-pt-border p-4 flex flex-col gap-2 z-40 transition-opacity",
+                isDialogOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+            )}>
                 {/* Primary Actions */}
                 <div className="flex gap-2">
                     {canAssign && (
-                        <Button onClick={() => setAction("assign")} variant="outline"
+                        <Button onClick={() => setAction("assign")} variant="outline" disabled={isDialogOpen}
                             className="flex-1 h-12 rounded-xl border-pt-accent/40 text-pt-accent hover:bg-pt-accent/10 font-medium">
                             <User className="w-4 h-4 mr-1.5" />
                             {ticket.technicianId ? "Reassign" : "Assign"}
@@ -482,12 +521,12 @@ export default function ManagerTicketDetail() {
                 {/* Secondary Actions */}
                 <div className="flex gap-2">
                     {ticket.status === "DONE" && (
-                        <Button onClick={() => setAction("dispute")} variant="outline"
+                        <Button onClick={() => setAction("dispute")} variant="outline" disabled={isDialogOpen}
                             className="flex-1 h-10 rounded-xl border-pt-red/40 text-pt-red hover:bg-pt-red/10 text-sm font-medium">
                             <XCircle className="w-4 h-4 mr-1.5" /> Dispute
                         </Button>
                     )}
-                    <Button onClick={() => setAction("close_dup")} variant="outline"
+                    <Button onClick={() => setAction("close_dup")} variant="outline" disabled={isDialogOpen}
                         className="flex-1 h-10 rounded-xl text-pt-text-muted text-sm font-medium">
                         <LinkIcon className="w-4 h-4 mr-1.5" /> Close as Duplicate
                     </Button>

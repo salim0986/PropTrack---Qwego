@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { usersTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 // Returns all technicians — optionally those in the same building as the manager
@@ -11,7 +11,10 @@ export async function GET() {
         if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
         const technicians = await db.query.usersTable.findMany({
-            where: eq(usersTable.role, "TECHNICIAN"),
+            where: and(
+                eq(usersTable.role, "TECHNICIAN"),
+                eq(usersTable.status, "ACTIVE")
+            ),
             columns: { id: true, name: true, specialties: true, phone: true, status: true },
         });
 

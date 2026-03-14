@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { buildingsTable } from "@/db/schema";
+import { buildingsTable, usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,12 +12,30 @@ const settingsSchema = z.object({
     emergencyPhone: z.string().optional().nullable(),
 });
 
+async function resolveManagerDbId(session: any): Promise<string | null> {
+    if (!session?.user?.id || session.user.role !== "MANAGER") return null;
+
+    const byId = await db.query.usersTable.findFirst({
+        where: eq(usersTable.id, session.user.id),
+        columns: { id: true, role: true },
+    });
+    if (byId?.role === "MANAGER") return byId.id;
+
+    if (!session.user.email) return null;
+    const byEmail = await db.query.usersTable.findFirst({
+        where: eq(usersTable.email, session.user.email),
+        columns: { id: true, role: true },
+    });
+    return byEmail?.role === "MANAGER" ? byEmail.id : null;
+}
+
 // PATCH /api/buildings/[id]/settings
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const session = await auth();
-        if (!session?.user?.id || session.user.role !== "MANAGER") {
+        const managerDbId = await resolveManagerDbId(session);
+        if (!managerDbId) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -29,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!building) return NextResponse.json({ message: "Building not found" }, { status: 404 });
 
         // Ensure manager is the manager of THIS building
-        if (building.managerId !== session.user.id) {
+        if (building.managerId !== managerDbId) {
             return NextResponse.json({ message: "You do not manage this building" }, { status: 403 });
         }
 
@@ -56,7 +74,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     try {
         const { id } = await params;
         const session = await auth();
-        if (!session?.user?.id || session.user.role !== "MANAGER") {
+        const managerDbId = await resolveManagerDbId(session);
+        if (!managerDbId) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -69,6 +88,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         });
 
         if (!building) return NextResponse.json({ message: "Building not found" }, { status: 404 });
+
+        const owner = await db.query.buildingsTable.findFirst({
+            where: eq(buildingsTable.id, id),
+            columns: { managerId: true },
+        });
+        if (!owner || owner.managerId !== managerDbId) {
+            return NextResponse.json({ message: "You do not manage this building" }, { status: 403 });
+        }
+
         return NextResponse.json(building);
     } catch {
         return NextResponse.json({ message: "Internal server error" }, { status: 500 });

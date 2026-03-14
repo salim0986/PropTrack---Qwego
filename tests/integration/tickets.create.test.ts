@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { mockFindFirstUser, mockFindFirstBuilding, mockFindManyManagers } = vi.hoisted(() => ({
     mockFindFirstUser: vi.fn(),
     mockFindFirstBuilding: vi.fn(),
-    mockFindManyManagers: vi.fn(() => []),
+    mockFindManyManagers: vi.fn(async () => [] as Array<{ id: string }>),
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
@@ -60,13 +60,13 @@ describe("GET /api/tickets", () => {
 
     it("returns 401 when unauthenticated", async () => {
         (auth as any).mockResolvedValue(null);
-        const res = await GET(new Request("http://localhost/api/tickets"));
+        const res = await GET();
         expect(res.status).toBe(401);
     });
 
     it("returns 200 for authenticated TENANT", async () => {
         (auth as any).mockResolvedValue(makeSession("TENANT"));
-        const res = await GET(new Request("http://localhost/api/tickets"));
+        const res = await GET();
         expect(res.status).toBe(200);
     });
 });

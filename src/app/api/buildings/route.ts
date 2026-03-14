@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { buildingsTable } from "@/db/schema";
+import { buildingsTable, usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -15,13 +15,37 @@ export async function GET(req: Request) {
             if (!session?.user?.id || session.user.role !== "MANAGER") {
                 return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
             }
-            const buildings = await db.query.buildingsTable.findMany({
-                where: eq(buildingsTable.managerId, session.user.id),
+            let managerDbId = session.user.id;
+
+            let buildings = await db.query.buildingsTable.findMany({
+                where: eq(buildingsTable.managerId, managerDbId),
                 columns: {
                     id: true, name: true, address: true, emergencyPhone: true,
                     businessHoursStart: true, businessHoursEnd: true, businessDays: true,
                 },
+                orderBy: (b, { asc }) => [asc(b.name)],
             });
+
+            // Fallback for environments where session.user.id is not the DB user id.
+            if (buildings.length === 0 && session.user.email) {
+                const managerUser = await db.query.usersTable.findFirst({
+                    where: eq(usersTable.email, session.user.email),
+                    columns: { id: true, role: true },
+                });
+
+                if (managerUser?.role === "MANAGER") {
+                    managerDbId = managerUser.id;
+                    buildings = await db.query.buildingsTable.findMany({
+                        where: eq(buildingsTable.managerId, managerDbId),
+                        columns: {
+                            id: true, name: true, address: true, emergencyPhone: true,
+                            businessHoursStart: true, businessHoursEnd: true, businessDays: true,
+                        },
+                        orderBy: (b, { asc }) => [asc(b.name)],
+                    });
+                }
+            }
+
             return NextResponse.json(buildings);
         }
 

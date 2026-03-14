@@ -1,17 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { User, ExternalLink, Copy } from "lucide-react";
+import { User, ExternalLink, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
+
+const TELEGRAM_CODE_KEY = "pt_tenant_telegram_code";
+
+type StoredTelegramCode = {
+    code: string;
+    expiresAt: number;
+};
 
 export default function TenantProfilePage() {
     const { data: session } = useSession();
     const [telegramCode, setTelegramCode] = useState<string | null>(null);
+    const [telegramCodeExpiresAt, setTelegramCodeExpiresAt] = useState<number | null>(null);
+    const [generatingTelegramCode, setGeneratingTelegramCode] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            const raw = localStorage.getItem(TELEGRAM_CODE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as StoredTelegramCode;
+            if (!parsed?.code || !parsed?.expiresAt) {
+                localStorage.removeItem(TELEGRAM_CODE_KEY);
+                return;
+            }
+            if (Date.now() < parsed.expiresAt) {
+                setTelegramCode(parsed.code);
+                setTelegramCodeExpiresAt(parsed.expiresAt);
+            } else {
+                localStorage.removeItem(TELEGRAM_CODE_KEY);
+            }
+        } catch {
+            localStorage.removeItem(TELEGRAM_CODE_KEY);
+        }
+    }, []);
 
     async function generateTelegramLink() {
+        setGeneratingTelegramCode(true);
         try {
             const res = await fetch("/api/telegram/connect", { method: "POST" });
             const data = await res.json();
@@ -21,14 +52,22 @@ export default function TenantProfilePage() {
             }
 
             setTelegramCode(data.code);
+            const expiresAt = Date.now() + ((data.expiresInSeconds ?? 600) * 1000);
+            setTelegramCodeExpiresAt(expiresAt);
+            if (typeof window !== "undefined") {
+                const value: StoredTelegramCode = { code: data.code, expiresAt };
+                localStorage.setItem(TELEGRAM_CODE_KEY, JSON.stringify(value));
+            }
             toast.info("Send this code", {
-                description: `Message @PropTrackBot with: ${data.code}`,
+                description: `Message @PropTrackkBot with: ${data.code}`,
                 duration: 8000,
             });
         } catch (error: any) {
             toast.error("Could not generate Telegram code", {
                 description: error?.message || "Please try again.",
             });
+        } finally {
+            setGeneratingTelegramCode(false);
         }
     }
 
@@ -74,7 +113,7 @@ export default function TenantProfilePage() {
 
                 {telegramCode && (
                     <div className="bg-pt-surface-light border border-pt-border rounded-xl p-3">
-                        <p className="text-xs text-pt-text-muted mb-1">Send this to @PropTrackBot:</p>
+                        <p className="text-xs text-pt-text-muted mb-1">Send this to @PropTrackkBot:</p>
                         <div className="flex items-center gap-2">
                             <code className="flex-1 text-sm text-pt-accent font-mono">{telegramCode}</code>
                             <button
@@ -87,7 +126,11 @@ export default function TenantProfilePage() {
                                 <Copy className="w-4 h-4" />
                             </button>
                         </div>
-                        <p className="text-xs text-pt-text-muted/60 mt-1.5">This code expires in 10 minutes</p>
+                        <p className="text-xs text-pt-text-muted/60 mt-1.5">
+                            {telegramCodeExpiresAt && Date.now() < telegramCodeExpiresAt
+                                ? `Code saved until ${new Date(telegramCodeExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                                : "This code expires in 10 minutes"}
+                        </p>
                     </div>
                 )}
 
@@ -96,11 +139,14 @@ export default function TenantProfilePage() {
                         variant="outline"
                         className="flex-1 h-10 rounded-xl text-sm border-pt-border"
                         onClick={generateTelegramLink}
+                        disabled={generatingTelegramCode}
                     >
-                        {telegramCode ? "Regenerate Code" : "Get Connection Code"}
+                        {generatingTelegramCode
+                            ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" />Generating...</>
+                            : (telegramCode ? "Regenerate Code" : "Get Connection Code")}
                     </Button>
                     <a
-                        href="https://t.me/PropTrackBot"
+                        href="https://t.me/PropTrackkBot"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="h-10 px-3 rounded-xl border border-pt-border flex items-center justify-center text-pt-text-muted hover:text-pt-text"

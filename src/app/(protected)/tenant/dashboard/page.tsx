@@ -7,7 +7,6 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 
 export default async function TenantDashboard() {
@@ -23,9 +22,9 @@ export default async function TenantDashboard() {
     });
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="w-full min-w-0 overflow-x-hidden flex flex-col gap-4 p-4 pb-28 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Welcome & CTA */}
-            <section className="space-y-4">
+            <section className="space-y-4 min-w-0">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-2xl font-bold tracking-tight text-pt-text">
                         Hello, {session.user.name?.split(" ")[0]}
@@ -49,14 +48,14 @@ export default async function TenantDashboard() {
             </section>
 
             {/* Stats / Active Count */}
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
-                <div className="bg-pt-surface-light border border-pt-border/50 rounded-xl p-3 min-w-[140px] flex-1">
+            <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="bg-pt-surface border border-pt-border rounded-2xl p-4 min-w-0">
                     <p className="text-[10px] uppercase tracking-wider text-pt-text-muted font-bold">Active Tickets</p>
                     <p className="text-2xl font-bold text-pt-text mt-1">
                         {tickets.filter(t => t.status !== "DONE" && t.status !== "CLOSED_DUPLICATE").length}
                     </p>
                 </div>
-                <div className="bg-pt-surface-light border border-pt-border/50 rounded-xl p-3 min-w-[140px] flex-1">
+                <div className="bg-pt-surface border border-pt-border rounded-2xl p-4 min-w-0">
                     <p className="text-[10px] uppercase tracking-wider text-pt-text-muted font-bold">Building</p>
                     <p className="text-sm font-semibold text-pt-text mt-1 truncate">
                         {tickets[0]?.building?.name || "PropTrack Demo"}
@@ -65,55 +64,47 @@ export default async function TenantDashboard() {
             </div>
 
             {/* Ticket List */}
-            <section className="space-y-4">
+            <section className="space-y-4 min-w-0">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-pt-text">Recent Requests</h2>
-                    <Button variant="link" className="text-pt-accent p-0 h-auto text-xs font-semibold">
+                    <Button variant="link" className="text-pt-accent p-0 h-auto text-xs font-semibold hover:underline">
                         View All
                     </Button>
                 </div>
 
                 {tickets.length === 0 ? (
-                    <Card className="border-dashed border-pt-border bg-transparent py-10">
-                        <CardContent className="flex flex-col items-center justify-center text-center space-y-3">
-                            <div className="bg-pt-surface-light p-4 rounded-full">
-                                <Ticket className="w-8 h-8 text-pt-text-muted" />
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-pt-text font-medium">No tickets yet</p>
-                                <p className="text-pt-text-dim text-xs max-w-[200px]">
-                                    When you report an issue, it will appear here.
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="bg-pt-surface border border-pt-border rounded-2xl p-8 text-center">
+                        <Ticket className="w-10 h-10 text-pt-text-muted mx-auto mb-3" />
+                        <p className="text-pt-text font-medium">No tickets yet</p>
+                        <p className="text-sm text-pt-text-muted mt-1">When you report an issue, it will appear here.</p>
+                    </div>
                 ) : (
-                    <div className="grid gap-3">
+                    <div className="grid gap-3 w-full min-w-0">
                         {tickets.map((ticket) => (
-                            <Link key={ticket.id} href={`/tenant/tickets/${ticket.id}`}>
-                                <Card className="bg-pt-surface border-pt-border/60 hover:border-pt-accent/40 hover:shadow-md transition-all active:scale-[0.98] group overflow-hidden">
-                                    <CardContent className="p-4 flex flex-col gap-3">
-                                        <div className="flex items-start justify-between gap-4">
+                            <Link key={ticket.id} href={`/tenant/tickets/${ticket.id}`} className="block w-full min-w-0">
+                                <div className="w-full bg-pt-surface border border-pt-border rounded-2xl p-4 group hover:border-pt-accent/40 transition-colors active:scale-[0.98]">
+                                    <div className="flex flex-col gap-3 w-full min-w-0">
+                                        <div className="flex items-start justify-between gap-3 min-w-0">
                                             <div className="space-y-1 min-w-0">
-                                                <h3 className="font-semibold text-pt-text truncate group-hover:text-pt-accent transition-colors">
+                                                <h3 className="font-semibold text-pt-text line-clamp-2 break-words group-hover:text-pt-accent transition-colors">
                                                     {ticket.title}
                                                 </h3>
-                                                <p className="text-xs text-pt-text-dim line-clamp-1">
+                                                <p className="text-xs text-pt-text-dim line-clamp-2 break-words">
                                                     {ticket.description}
                                                 </p>
                                             </div>
-                                            <PriorityBadge priority={ticket.priority} className="shrink-0" />
+                                            <PriorityBadge priority={ticket.priority} className="shrink-0 self-start" />
                                         </div>
 
-                                        <div className="flex items-center justify-between pt-1 border-t border-pt-border/30 mt-1">
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-pt-border/30 mt-1 min-w-0">
                                             <StatusBadge status={ticket.status} />
-                                            <div className="flex items-center gap-1.5 text-[10px] text-pt-text-muted font-medium">
+                                            <div className="flex items-center gap-1.5 text-[10px] text-pt-text-muted font-medium shrink-0">
                                                 <span className="w-1 h-1 rounded-full bg-pt-border"></span>
                                                 {formatDistanceToNow(new Date(ticket.createdAt))} ago
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </div>
+                                </div>
                             </Link>
                         ))}
                     </div>

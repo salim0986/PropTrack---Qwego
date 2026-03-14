@@ -2,10 +2,11 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
-import { LogOut, Bell, Building } from "lucide-react";
+import { LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 
 interface TopBarProps {
     title?: string;
@@ -33,7 +34,7 @@ export function TopBar({ title = "PropTrack", showBack = false }: TopBarProps) {
         <header className="sticky top-0 z-50 w-full bg-pt-surface/80 backdrop-blur-md border-b border-pt-border flex items-center h-14 px-4">
             {/* Fallback for Back Button if needed, else brand logo */}
             <div className="flex-1 flex items-center gap-2">
-                {!showBack && <Building className="w-5 h-5 text-pt-accent" />}
+                {!showBack && <BrandLogo className="w-5 h-5 rounded-sm" />}
                 <span className="font-semibold text-pt-text tracking-tight">{title}</span>
             </div>
 

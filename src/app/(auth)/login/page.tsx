@@ -4,7 +4,7 @@ import * as React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Building, ArrowRight, Loader2, User, Wrench, Shield } from "lucide-react";
+import { ArrowRight, Loader2, User, Wrench, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 
 const DEMO_CREDENTIALS = [
     { role: "Tenant", email: "tenant@proptrack.io", password: "Demo1234!", icon: User, color: "text-pt-green" },
@@ -82,8 +83,8 @@ export default function LoginPage() {
                 className="w-full max-w-sm"
             >
                 <div className="bg-pt-surface shadow-2xl rounded-2xl border border-pt-border/60 p-6 sm:p-8 flex flex-col items-center">
-                    <div className="w-12 h-12 bg-pt-accent/10 rounded-xl flex items-center justify-center mb-6">
-                        <Building className="w-6 h-6 text-pt-accent" />
+                    <div className="w-12 h-12 bg-pt-surface-light border border-pt-border/60 rounded-xl flex items-center justify-center mb-6">
+                        <BrandLogo className="w-8 h-8 rounded-md" priority />
                     </div>
 
                     <div className="text-center space-y-1.5 mb-6">
