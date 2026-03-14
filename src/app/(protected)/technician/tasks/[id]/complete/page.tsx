@@ -4,17 +4,42 @@ import { useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { ArrowLeft, Camera, CheckCircle2, Loader2, X, Lock } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, ImagePlus, Loader2, X, Lock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const MIN_NOTES_LENGTH = 20;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+async function getErrorMessage(res: Response, fallback: string) {
+    const contentType = res.headers.get("content-type") ?? "";
+
+    if (contentType.includes("application/json")) {
+        try {
+            const data = await res.json() as { message?: string };
+            if (typeof data.message === "string" && data.message.trim()) return data.message;
+        } catch {
+            // Fall through to default message.
+        }
+    } else {
+        try {
+            const text = (await res.text()).trim();
+            if (text) return text;
+        } catch {
+            // Fall through to default message.
+        }
+    }
+
+    return `${fallback} (HTTP ${res.status})`;
+}
 
 export default function CompleteTicketPage() {
     const { id } = useParams();
     const router = useRouter();
-    const fileRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const [notes, setNotes] = useState("");
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -29,6 +54,19 @@ export default function CompleteTicketPage() {
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            toast.error("Use JPEG, PNG, or WebP image format");
+            e.target.value = "";
+            return;
+        }
+
+        if (file.size > MAX_UPLOAD_BYTES) {
+            toast.error("Photo is too large. Maximum allowed size is 5MB.");
+            e.target.value = "";
+            return;
+        }
+
         setImagePreview(URL.createObjectURL(file));
 
         // Auto-upload
@@ -43,8 +81,8 @@ export default function CompleteTicketPage() {
             });
 
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || "Upload failed");
+                const message = await getErrorMessage(res, "Upload failed");
+                throw new Error(message);
             }
             
             const data = await res.json();
@@ -53,8 +91,10 @@ export default function CompleteTicketPage() {
         } catch (e: any) {
             toast.error(e.message || "Upload failed — try again");
             setImagePreview(null);
+            setUploadedUrl(null);
         } finally {
             setUploading(false);
+            e.target.value = "";
         }
     }
 
@@ -161,10 +201,18 @@ export default function CompleteTicketPage() {
                     </Label>
 
                     <input
-                        ref={fileRef}
+                        ref={cameraInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp"
                         capture="environment"
+                        className="hidden"
+                        onChange={handleFileChange}
+                    />
+
+                    <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
                         className="hidden"
                         onChange={handleFileChange}
                     />
@@ -204,20 +252,37 @@ export default function CompleteTicketPage() {
                                 </button>
                             </motion.div>
                         ) : (
-                            <motion.button
+                            <motion.div
                                 key="upload"
                                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                onClick={() => fileRef.current?.click()}
-                                className="w-full aspect-video border-2 border-dashed border-pt-border/60 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-pt-accent/60 transition-colors group"
+                                className="w-full border-2 border-dashed border-pt-border/60 rounded-xl p-4 flex flex-col items-center justify-center gap-3"
                             >
                                 <div className="w-12 h-12 bg-pt-accent/10 rounded-full flex items-center justify-center group-hover:bg-pt-accent/20 transition-colors">
                                     <Camera className="w-6 h-6 text-pt-accent" />
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-sm font-medium text-pt-text">Take or upload photo</p>
+                                    <p className="text-sm font-medium text-pt-text">Add proof photo</p>
                                     <p className="text-xs text-pt-text-muted mt-0.5">Required proof of completion</p>
                                 </div>
-                            </motion.button>
+                                <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => cameraInputRef.current?.click()}
+                                        className="h-11 rounded-xl bg-pt-accent text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-pt-accent/90 transition-colors"
+                                    >
+                                        <Camera className="w-4 h-4" />
+                                        Take Photo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => galleryInputRef.current?.click()}
+                                        className="h-11 rounded-xl border border-pt-border bg-pt-surface-light text-pt-text text-sm font-semibold flex items-center justify-center gap-2 hover:border-pt-accent/50 transition-colors"
+                                    >
+                                        <ImagePlus className="w-4 h-4" />
+                                        Choose from Gallery
+                                    </button>
+                                </div>
+                            </motion.div>
                         )}
                     </AnimatePresence>
                 </section>
